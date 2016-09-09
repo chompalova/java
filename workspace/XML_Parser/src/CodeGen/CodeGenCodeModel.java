@@ -13,6 +13,7 @@ import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 
+import xmlParser_DOM.Command;
 import xmlParser_DOM.XMLParser;
 import xmlParser_DOM.ZWaveCmdClass;
  
@@ -20,7 +21,6 @@ public class CodeGenCodeModel {
  
   public static void main(String ... args) {
     File file = new File ("./resources/ZWave_cmd_classes.xml");
-    //File file = new File ("./resources/test1.xml");
     if (file != null) {
       XMLParser.parse(file);
     }    
@@ -38,69 +38,79 @@ public class CodeGenCodeModel {
   public static void generateSource() throws JClassAlreadyExistsException, IOException {
     //Instantiate an instance of the JCodeModel class
     JCodeModel codeModel = new JCodeModel();
- 
-    //JDefinedClass will let you create a class in a specified package.    
     List <ZWaveCmdClass> cmdClasses = XMLParser.getCmdClasses(); 
-    ZWaveCmdClass[] cmdClasses1 = cmdClasses.toArray(new ZWaveCmdClass[cmdClasses.size()]);        
-    List <JDefinedClass> generatedCmdClasses = new ArrayList <JDefinedClass>();
+    //List <JDefinedClass> generatedCmdClasses = new ArrayList <JDefinedClass>();
     String className = null;
-    for (int i = 0, j = (i + 1); j < cmdClasses1.length; i++, j++) {
-      JDefinedClass cmdClass = null;
-      String name1 = cmdClasses1[i].getName();
-      String name2 = cmdClasses1[j].getName();      
+    for (int i = 0, j = (i + 1); j < cmdClasses.size(); i++, j++) {
+      JDefinedClass generatedClass = null;
+      ZWaveCmdClass previousCmdClass = cmdClasses.get(i);
+      ZWaveCmdClass currentCmdClass = cmdClasses.get(j);
+      String name1 = previousCmdClass.getName();
+      String name2 = currentCmdClass.getName();      
       if (name1.equals(name2)) {
-        String className1 = cmdClasses1[i].getName() + "_V" + cmdClasses1[i].getVersion();
+        String className1 = previousCmdClass.getName() + "_V" + previousCmdClass.getVersion();
         if (!className1.equals(className)) {
-          cmdClass = codeModel._class(className1);
-          //generatedCmdClasses.add(cmdClass);
-          createFields(cmdClass, codeModel);
-          className = className1; 
+          generatedClass = codeModel._class(className1);
+          //generatedCmdClasses.add(generatedClass);
+          className = className1;
+          if (generatedClass != null) {
+            setFields(previousCmdClass, generatedClass, codeModel);
+          }
         }
-        String className2 = cmdClasses1[j].getName() + "_V" + cmdClasses1[j].getVersion();
+        String className2 = currentCmdClass.getName() + "_V" + currentCmdClass.getVersion();
         if (!className2.equals(className)) {
-          cmdClass = codeModel._class(className2);
-          createFields(cmdClass, codeModel);
-          //generatedCmdClasses.add(cmdClass);
+          generatedClass = codeModel._class(className2);
+          //generatedCmdClasses.add(generatedClass);
           className = className2;
+          if (generatedClass != null) {
+            setFields(currentCmdClass, generatedClass, codeModel);
+          }
         }          
       } else {
-          String className3 = cmdClasses1[j].getName();
-          if (j != (cmdClasses1.length - 1) && !(className3.equals(cmdClasses1[j+1].getName()))) {             
-            cmdClass = codeModel._class(className3);
-            createFields(cmdClass, codeModel);
-            //generatedCmdClasses.add(cmdClass);
-          } else if (j == (cmdClasses1.length - 1)) {
-            cmdClass = codeModel._class(className3);
-            createFields(cmdClass, codeModel);
-            //generatedCmdClasses.add(cmdClass);
+          String className3 = cmdClasses.get(j).getName();
+          if (j != (cmdClasses.size() - 1)) {                       
+            if (!className3.equals(cmdClasses.get(j+1).getName())) {
+              generatedClass = codeModel._class(className3);
+              //generatedCmdClasses.add(generatedClass);
+              if (generatedClass != null) {
+                setFields(currentCmdClass, generatedClass, codeModel);
+              }
+            }                 
+          } else { //last element
+              generatedClass = codeModel._class(className3);
+              if (generatedClass != null) {
+                setFields(currentCmdClass, generatedClass, codeModel);
+              }
           }
-      }
+      }      
     }
-    writeToFile(codeModel);
-  }
-    /*for (JDefinedClass cmdClass : generatedCmdClasses) {
-      JFieldVar field1 = cmdClass.field(JMod.PRIVATE, String.class, "name");
-      JFieldVar field2 = cmdClass.field(JMod.PRIVATE, String.class, "version");
-      JMethod field1GetterMethod = cmdClass.method(JMod.PUBLIC, field1.type(), "getName");
-      JMethod field1SetterMethod = cmdClass.method(JMod.PUBLIC, codeModel.VOID, "setName");
-      JMethod field2GetterMethod = cmdClass.method(JMod.PUBLIC, field2.type(), "getVersion");
-      JMethod field2SetterMethod = cmdClass.method(JMod.PUBLIC, codeModel.VOID, "setVersion");
-    }*/
-    
-  public static void createFields(JDefinedClass cmdClass, JCodeModel codeModel) {
-    JFieldVar name = cmdClass.field(JMod.PRIVATE, String.class, "name");
-    JFieldVar version = cmdClass.field(JMod.PRIVATE, String.class, "version");
-    JMethod nameGetterMethod = cmdClass.method(JMod.PUBLIC, name.type(), "getName");
-    JMethod nameSetterMethod = cmdClass.method(JMod.PUBLIC, codeModel.VOID, "setName");
-    JMethod versionGetterMethod = cmdClass.method(JMod.PUBLIC, version.type(), "getVersion");
-    JMethod versionSetterMethod = cmdClass.method(JMod.PUBLIC, codeModel.VOID, "setVersion");
+    generateClasses(codeModel);
   }
   
-  public static void writeToFile (JCodeModel codeModel) throws IOException {
+  public static void setFields(ZWaveCmdClass cmdClass, JDefinedClass generatedClass, JCodeModel codeModel) {        
+    JFieldVar name = generatedClass.field(JMod.PRIVATE|JMod.FINAL, String.class, "name");
+    JFieldVar version = generatedClass.field(JMod.PRIVATE|JMod.FINAL, codeModel.INT, "version");
+    JMethod nameGetterMethod = generatedClass.method(JMod.PUBLIC, name.type(), "getName");
+    JMethod nameSetterMethod = generatedClass.method(JMod.PUBLIC, codeModel.VOID, "setName");
+    JMethod versionGetterMethod = generatedClass.method(JMod.PUBLIC, version.type(), "getVersion");
+    JMethod versionSetterMethod = generatedClass.method(JMod.PUBLIC, codeModel.VOID, "setVersion");        
+    setCommandField(cmdClass, generatedClass, codeModel);
+  }
+  
+  public static void setCommandField(ZWaveCmdClass cmdClass, JDefinedClass generatedClass, JCodeModel codeModel) {   
+    List<Command> commands = cmdClass.getCommands();
+    for (Command command : commands) {
+      JFieldVar cmd = generatedClass.field(JMod.PUBLIC|JMod.STATIC|JMod.FINAL, codeModel.BYTE, command.getName());
+      //byte []keyId = command.getKeyId().getBytes();
+      cmd.init(JExpr.lit(command.getKeyId()));
+    }
+  }
+
+  public static void generateClasses (JCodeModel codeModel)throws IOException {
     File target = new File("./target/classes");
     if (!target.mkdirs()) {
-      throw new IOException("Cannot make dir.");
+      throw new IOException("Cannot create classes.");
     }
     codeModel.build(target);
-  }
+  }        
 }
